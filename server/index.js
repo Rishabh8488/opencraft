@@ -1,3 +1,4 @@
+// app.js
 import Fastify from 'fastify';
 import sqlite3 from 'sqlite3';
 import { open } from 'sqlite';
@@ -13,8 +14,8 @@ const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 // Using gemini-1.5-flash for balanced performance and availability
 const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
-// --- PERIODIC TABLE ELEMENTS LIST ---
-// This list is available within your backend file.
+// --- PERIODIC TABLE ELEMENTS LIST (Commented out as not directly used in new logic, but kept for reference) ---
+/*
 const periodicTableElements = [
     "Hydrogen", "Helium", "Lithium", "Beryllium", "Boron", "Carbon", "Nitrogen", "Oxygen", "Fluorine", "Neon",
     "Sodium", "Magnesium", "Aluminum", "Silicon", "Phosphorus", "Sulfur", "Chlorine", "Argon", "Potassium", "Calcium",
@@ -29,6 +30,7 @@ const periodicTableElements = [
     "Mendelevium", "Nobelium", "Lawrencium", "Rutherfordium", "Dubnium", "Seaborgium", "Bohrium", "Hassium", "Meitnerium", "Darmstadtium",
     "Roentgenium", "Copernicium", "Nihonium", "Flerovium", "Moscovium", "Livermorium", "Tennessine", "Oganesson"
 ];
+*/
 // --- END PERIODIC TABLE ELEMENTS LIST ---
 
 
@@ -41,7 +43,6 @@ let db; // Database instance
 /**
  * Initializes the SQLite database, creating the 'cache.db' file
  * and the 'word_cache' table if they don't already exist.
- * The 'emoji' column has been removed from the table definition.
  */
 async function initializeDatabase() {
     db = await open({
@@ -54,7 +55,6 @@ async function initializeDatabase() {
             first_word TEXT,
             second_word TEXT,
             result TEXT
-            -- emoji TEXT -- Removed emoji column
         )
     `);
 }
@@ -76,7 +76,6 @@ await fastify.register(cors, {
 /**
  * Checks the local SQLite cache for a pre-existing combination of two words.
  * It searches for both (word1, word2) and (word2, word1) order to ensure cache hit.
- * The 'emoji' field is no longer selected.
  * @param {string} firstWord - The first word (element) to check.
  * @param {string} secondWord - The second word (element) to check.
  * @returns {Promise<object | undefined>} Cached result with 'result' property, or undefined if not found.
@@ -96,21 +95,19 @@ async function craftNewWordFromCache(firstWord, secondWord) {
 
 /**
  * Caches a new word combination along with its result.
- * The 'emoji' parameter and column are no longer used.
  * @param {string} firstWord - The first word of the combination.
  * @param {string} secondWord - The second word of the combination.
  * @param {string} result - The crafted word/result from the AI.
  * @returns {Promise<void>}
  */
-async function cacheNewWord(firstWord, secondWord, result) { // Removed emoji parameter
-    await db.run('INSERT INTO word_cache (first_word, second_word, result) VALUES (?, ?, ?)', [firstWord, secondWord, result]); // Removed emoji column
+async function cacheNewWord(firstWord, secondWord, result) {
+    await db.run('INSERT INTO word_cache (first_word, second_word, result) VALUES (?, ?, ?)', [firstWord, secondWord, result]);
 }
 
 /**
  * Crafts a new word by combining two input words/elements using the Gemini API.
  * It prioritizes fetching from the cache to reduce API calls and improve performance.
  * If not in cache, it calls Gemini and then stores the result in cache.
- * The returned object no longer includes an 'emoji' field.
  * @param {string} firstWord - The first word (element) to combine.
  * @param {string} secondWord - The second word (element) to combine.
  * @returns {Promise<object>} An object containing only the 'result'. Returns '???' if an error occurs.
@@ -126,23 +123,46 @@ async function craftNewWord(firstWord, secondWord) {
     console.log(`Calling Gemini API for: ${firstWord} and ${secondWord}`);
 
     try {
-        // Construct the prompt for the Gemini model
-        const prompt = `You are a chemistry simulation assistant. When given two chemical elements or compounds, return a plausible resulting compound or concept in a fun chemistry crafting game.
-        What do you get when you combine "${firstWord}" and "${secondWord}"?
-        Give me a **one-word answer**, do not reply to me using a paragraph. I just need one word from you.`
-        ;
+        // MODIFIED: New prompt to guide Gemini for chemical formulas
+        const prompt = `You are an expert chemist and a chemical reaction simulator.
+        Your task is to predict the most plausible and simplest chemical formula (e.g., H2O, NaCl, CO2, NH3) when two chemical elements or simple compounds are combined.
+        Provide ONLY the resulting chemical formula. Do NOT include any additional text, explanations, balancing numbers (like "2" in "2H2O"), or conversational phrases.
+        If no common, stable compound is formed, respond with "No reaction".
+
+        Examples:
+        Input: "H" and "O" -> Output: "H2O"
+        Input: "Na" and "Cl" -> Output: "NaCl"
+        Input: "C" and "O" -> Output: "CO2"
+        Input: "Fe" and "O" -> Output: "Fe2O3"
+        Input: "N" and "H" -> Output: "NH3"
+        Input: "He" and "Ne" -> Output: "No reaction"
+        Input: "H2O" and "C" -> Output: "No reaction"
+
+        What is the primary chemical formula when you combine "${firstWord}" and "${secondWord}"?
+        Provide only the chemical formula.`;
+
 
         const result = await model.generateContent(prompt);
         const response = await result.response;
-        const answer = response.text().trim();
-        // const emoji = ""; // Emoji generation is removed
+        let answer = response.text().trim();
 
-        // Cache the new result before returning (removed emoji from cache call)
+        // Optional: Further clean-up to ensure only the formula remains
+        // This regex tries to capture common formula patterns or "No reaction"
+        // It's a best effort, Gemini should mostly follow the prompt.
+        const formulaRegex = /^(?:[A-Z][a-z]?\d*)+|\bNo reaction\b/g;
+        const match = answer.match(formulaRegex);
+        if (match && match[0]) {
+            answer = match[0];
+        } else {
+            // Fallback if Gemini gives something unexpected despite the prompt
+            answer = "???";
+        }
+
+        // Cache the new result
         await cacheNewWord(firstWord, secondWord, answer);
 
         return {
             result: answer
-            // emoji: emoji // Removed emoji from return
         };
 
     } catch (err) {
@@ -150,30 +170,29 @@ async function craftNewWord(firstWord, secondWord) {
         // Return a default error response if the API call fails
         return {
             result: "???"
-            // emoji: "" // Removed emoji from error return
         };
     }
 }
 
 /**
- * Helper function to capitalize the first letter of a string.
- * Ensures consistent casing for element names, especially for cache lookups.
+ * Helper function to ensure consistent casing for chemical symbols/compounds.
+ * Capitalizes the first letter and leaves the rest as is (e.g., "h" -> "H", "fe" -> "Fe", "H2O" -> "H2O").
  * @param {string} string - The input string.
  * @returns {string} The string with its first letter capitalized, or an empty string if input is null/empty.
  */
 function capitalizeFirstLetter(string) {
     if (!string) return '';
-    return string.charAt(0).toUpperCase() + string.slice(1);
+    const trimmedString = string.trim();
+    if (trimmedString.length === 0) return '';
+    return trimmedString.charAt(0).toUpperCase() + trimmedString.slice(1);
 }
 
 // --- API Routes ---
 
 /**
  * GET /
- * This route returns pre-selected combinations of periodic table elements.
- * IMPORTANT: If your frontend expects specific keys like "Water + Fire",
- * you WILL need to update your frontend to handle the new keys (e.g., "Hydrogen + Oxygen")
- * and to no longer expect an 'emoji' property.
+ * This route returns pre-selected combinations using element symbols.
+ * This is primarily for demonstration or initial data if needed elsewhere.
  */
 fastify.route({
     method: 'GET',
@@ -182,7 +201,6 @@ fastify.route({
         response: {
             200: {
                 type: 'object',
-                // This allows any string as a key, and ensures the value matches the { result } structure
                 additionalProperties: {
                     type: 'object',
                     properties: {
@@ -199,14 +217,14 @@ fastify.route({
     handler: async (request, reply) => {
         reply.type('application/json').code(200);
 
-        // New combinations using common periodic table elements
+        // MODIFIED: Changed combinations to use element symbols for consistency
         return {
-            'Hydrogen + Oxygen': (await craftNewWord('Hydrogen', 'Oxygen')),
-            'Sodium + Chlorine': (await craftNewWord('Sodium', 'Chlorine')),
-            'Carbon + Oxygen': (await craftNewWord('Carbon', 'Oxygen')),
-            'Iron + Oxygen': (await craftNewWord('Iron', 'Oxygen')),
-            'Silicon + Oxygen': (await craftNewWord('Silicon', 'Oxygen')),
-            'Nitrogen + Hydrogen': (await craftNewWord('Nitrogen', 'Hydrogen'))
+            'H + O': (await craftNewWord('H', 'O')),
+            'Na + Cl': (await craftNewWord('Na', 'Cl')),
+            'C + O': (await craftNewWord('C', 'O')),
+            'Fe + O': (await craftNewWord('Fe', 'O')),
+            'Si + O': (await craftNewWord('Si', 'O')),
+            'N + H': (await craftNewWord('N', 'H'))
         };
     }
 });
@@ -246,8 +264,10 @@ fastify.route({
             return;
         }
 
-        const firstWord = capitalizeFirstLetter(request.body.first.trim().toLowerCase());
-        const secondWord = capitalizeFirstLetter(request.body.second.trim().toLowerCase());
+        // Apply capitalizeFirstLetter to ensure consistent casing for symbols
+        // e.g., 'h' becomes 'H', 'fe' becomes 'Fe', 'cl' becomes 'Cl'
+        const firstWord = capitalizeFirstLetter(request.body.first);
+        const secondWord = capitalizeFirstLetter(request.body.second);
         reply.type('application/json').code(200);
 
         return await craftNewWord(firstWord, secondWord);

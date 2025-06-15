@@ -17,7 +17,7 @@ export const useBoxesStore = defineStore('boxes', () => { // Confirm 'boxes' as 
   const boxes = reactive<{
     [key: string]: BoxStoreEntry
   }>({
-    'a': {id: 'a', top: 20, left: 80, title: 'Hydrogen'}, // Example initial box
+    'a': {id: 'a', top: 20, left: 80, title: 'H'}, // Example initial box
   })
 
   function addBox(box: BoxStoreEntry) {
