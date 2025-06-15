@@ -1,47 +1,41 @@
-<script lang="ts" setup>
-import {useDrop, XYCoord} from 'vue3-dnd'
-import {ItemTypes} from './ItemTypes'
-import Box from './Box.vue'
-import type {DragItem} from './interfaces'
-import {reactive, ref} from 'vue'
-import ItemCard from "@/components/ItemCard.vue";
-import AvailableResources from "@/components/AvailableResources.vue";
-import {useBoxesStore} from "@/stores/useBoxesStore";
-import {storeToRefs} from "pinia";
+<script setup lang="ts">
+import Box from '@/components/Box.vue'
+import ItemCard from '@/components/ItemCard.vue'
+import { useBoxesStore } from '@/stores/useBoxesStore'
+import { useDrop } from 'vue3-dnd'
+import { ItemTypes } from '@/components/ItemTypes'
+import { ref } from 'vue'
+import AvailableResources from '@/components/AvailableResources.vue'
 
 const store = useBoxesStore()
-const { boxes } = store
-const moveBox = (id: string, left: number, top: number, title?: string, emoji?: string) => {
-  if (id) {
-    Object.assign(boxes[id], {left, top})
-  } else {
-    const key = Math.random().toString(36).substring(7);
-    boxes[key] = {top, left, title, emoji}
-    console.log(boxes)
-
-  }
-}
+const { boxes, removeBox, addBox } = store
 
 const containerElement = ref<HTMLElement | null>(null)
 
 const [, drop] = useDrop(() => ({
   accept: ItemTypes.BOX,
-  drop(item: DragItem, monitor) {
-    if (item.id && item.left !== null && item.top !== null) {
-      const delta = monitor.getDifferenceFromInitialOffset() as XYCoord
-      if(delta && delta.x && delta.y){
-        const left = Math.round((item.left) + delta.x)
-        const top = Math.round((item.top) + delta.y )
-        moveBox(item.id, left, top)
-      }
+  drop: (item: { id: string }, monitor) => {
+    const delta = monitor.getDifferenceFromInitialOffset() as { x: number; y: number }
+
+    if (item.id && store.boxes[item.id]) {
+      const left = Math.round(store.boxes[item.id].left + delta.x)
+      const top = Math.round(store.boxes[item.id].top + delta.y)
+      store.boxes[item.id].left = left
+      store.boxes[item.id].top = top
     } else {
-      const delta = monitor.getClientOffset() as XYCoord
-      // current mouse position relative to drop
-      const containerCoords = containerElement.value.getBoundingClientRect()
-      if(delta && delta.x && delta.y){
-        const left = Math.round(delta.x - containerCoords.left - 40)
-        const top = Math.round(delta.y - containerCoords.top - 15)
-        moveBox(null, left, top, item.title, item.emoji)
+      const clientOffset = monitor.getClientOffset()
+      if (containerElement.value && clientOffset) {
+        const containerRect = containerElement.value.getBoundingClientRect()
+        const newLeft = clientOffset.x - containerRect.left
+        const newTop = clientOffset.y - containerRect.top
+
+        const newId = Math.random().toString(36).substring(2, 7)
+        addBox({
+          id: newId,
+          top: newTop,
+          left: newLeft,
+          title: item.id
+        })
       }
     }
     return undefined
@@ -51,37 +45,38 @@ const [, drop] = useDrop(() => ({
 
 <template>
   <div ref="containerElement">
-
     <main class="flex gap-x-3">
       <div class="w-3/4">
-        <div :ref="drop" class="container">
+        <div :ref="drop"
+             class="container bg-gray-200 dark:bg-black">
           <Box
-              v-for="(value, key) in boxes"
-              :id="key"
-              :key="key"
-              :left="value.left"
-              :top="value.top"
-              :loading="value.loading"
+            v-for="(value, key) in boxes"
+            :id="value.id"
+            :key="value.id"
+            :left="value.left"
+            :top="value.top"
+            :loading="value.loading"
           >
-            <ItemCard size="large" :id="key" :title="value.title" :emoji="value.emoji"/>
+            <ItemCard size="large" :id="value.id" :title="value.title"/>
           </Box>
         </div>
       </div>
-      <div class="w-1/4 bg-white shadow px-4 py-3 border-gray-200 border rounded-lg overflow-y-scroll max-h-[80vh]">
-        <h2 class="font-semibold">Resources</h2>
+      <div class="w-1/4 bg-white shadow px-4 py-3 border-gray-200 border rounded-lg overflow-y-scroll max-h-[80vh]
+                  dark:bg-black dark:border-gray-700 dark:text-gray-100">
+        <h2 class="font-semibold text-gray-800 dark:text-gray-100">Resources</h2>
         <AvailableResources></AvailableResources>
       </div>
     </main>
-
-
   </div>
-
 </template>
 
 <style scoped>
 .container {
+  min-height: 80vh;
+  border: 1px solid #ccc;
   position: relative;
-  width: 100%;
-  height: 90vh;
+  border-radius: 8px;
 }
+/* IMPORTANT: Ensure no 'background-color' is set for .container here,
+   as it would override Tailwind. */
 </style>

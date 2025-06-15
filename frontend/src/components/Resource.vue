@@ -3,19 +3,21 @@ import { useDrag } from 'vue3-dnd'
 import { ItemTypes } from './ItemTypes'
 import { toRefs } from '@vueuse/core'
 import ItemCard from "@/components/ItemCard.vue";
+
 const props = defineProps<{
-  emoji: string
+  // REMOVED emoji: string
   title: string
 }>()
 
 const [collect, drag] = useDrag(() => ({
   type: ItemTypes.BOX,
-  item: { title: props.title, emoji: props.emoji },
+  // REMOVED emoji from the item object
+  item: { title: props.title },
   collect: monitor => ({
     isDragging: monitor.isDragging(),
   }),
 }))
-const { isDragging } = toRefs(collect)
+const { isDragging } = toRefs(collect) // isDragging still relies on collect, which is fine
 </script>
 
 <template>
@@ -25,7 +27,7 @@ const { isDragging } = toRefs(collect)
       role="Box"
       data-testid="box"
   >
-    <ItemCard :title="title" :emoji="emoji"></ItemCard>
+    <ItemCard :title="title"></ItemCard>
   </div>
 </template>
 

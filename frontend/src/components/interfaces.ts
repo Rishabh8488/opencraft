@@ -3,6 +3,6 @@ export interface DragItem {
     id: string
     top: number|null
     left: number|null
-    emoji: string
+    // REMOVED emoji: string
     title: string
 }

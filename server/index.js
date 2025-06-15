@@ -1,28 +1,48 @@
-import Fastify from 'fastify'
+import Fastify from 'fastify';
 import sqlite3 from 'sqlite3';
 import { open } from 'sqlite';
 import { fileURLToPath } from "url";
 import path from "path";
-import { LlamaChatSession, LlamaContext, LlamaJsonSchemaGrammar, LlamaModel } from "node-llama-cpp";
-import cors from '@fastify/cors'
-import { OpenAI } from 'openai';
+import cors from '@fastify/cors';
 import dotenv from "dotenv";
-dotenv.config()
-import { GoogleGenerativeAI } from '@google/generative-ai'
+dotenv.config();
+import { GoogleGenerativeAI } from '@google/generative-ai';
 
+// Initialize Gemini API with your API key from .env
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+// Using gemini-1.5-flash for balanced performance and availability
 const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-// const model = genAI.getGenerativeModel({ model: "gemini-pro" });
 
-// const openai=new OpenAI({
-//     apiKey:process.env.OPENAI_API_KEY
-// });
+// --- PERIODIC TABLE ELEMENTS LIST ---
+// This list is available within your backend file.
+const periodicTableElements = [
+    "Hydrogen", "Helium", "Lithium", "Beryllium", "Boron", "Carbon", "Nitrogen", "Oxygen", "Fluorine", "Neon",
+    "Sodium", "Magnesium", "Aluminum", "Silicon", "Phosphorus", "Sulfur", "Chlorine", "Argon", "Potassium", "Calcium",
+    "Scandium", "Titanium", "Vanadium", "Chromium", "Manganese", "Iron", "Cobalt", "Nickel", "Copper", "Zinc",
+    "Gallium", "Germanium", "Arsenic", "Selenium", "Bromine", "Krypton", "Rubidium", "Strontium", "Yttrium", "Zirconium",
+    "Niobium", "Molybdenum", "Technetium", "Ruthenium", "Rhodium", "Palladium", "Silver", "Cadmium", "Indium", "Tin",
+    "Antimony", "Tellurium", "Iodine", "Xenon", "Cesium", "Barium", "Lanthanum", "Cerium", "Praseodymium", "Neodymium",
+    "Promethium", "Samarium", "Europium", "Gadolinium", "Terbium", "Dysprosium", "Holmium", "Erbium", "Thulium", "Ytterbium",
+    "Lutetium", "Hafnium", "Tantalum", "Tungsten", "Rhenium", "Osmium", "Iridium", "Platinum", "Gold", "Mercury",
+    "Thallium", "Lead", "Bismuth", "Polonium", "Astatine", "Radon", "Francium", "Radium", "Actinium", "Thorium",
+    "Protactinium", "Uranium", "Neptunium", "Plutonium", "Americium", "Curium", "Berkelium", "Californium", "Einsteinium", "Fermium",
+    "Mendelevium", "Nobelium", "Lawrencium", "Rutherfordium", "Dubnium", "Seaborgium", "Bohrium", "Hassium", "Meitnerium", "Darmstadtium",
+    "Roentgenium", "Copernicium", "Nihonium", "Flerovium", "Moscovium", "Livermorium", "Tennessine", "Oganesson"
+];
+// --- END PERIODIC TABLE ELEMENTS LIST ---
 
+
+// Helper for __dirname equivalent in ES Modules
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-let db;
+let db; // Database instance
 
+/**
+ * Initializes the SQLite database, creating the 'cache.db' file
+ * and the 'word_cache' table if they don't already exist.
+ * The 'emoji' column has been removed from the table definition.
+ */
 async function initializeDatabase() {
     db = await open({
         filename: path.join(__dirname, 'cache.db'),
@@ -33,225 +53,212 @@ async function initializeDatabase() {
             id INTEGER PRIMARY KEY,
             first_word TEXT,
             second_word TEXT,
-            result TEXT,
-            emoji TEXT
+            result TEXT
+            -- emoji TEXT -- Removed emoji column
         )
     `);
 }
 
-initializeDatabase();
+initializeDatabase(); // Call to set up the database when the server starts
 
+// Initialize Fastify server instance
 const fastify = Fastify({
-    logger: true,
-    requestTimeout: 60 * 1000
-})
-await fastify.register(cors, {
-    // put your options here
-})
+    logger: true, // Enable logging for debugging
+    requestTimeout: 60 * 1000 // Set a generous timeout for API calls (60 seconds)
+});
 
+// Register CORS plugin to allow cross-origin requests from your frontend
+await fastify.register(cors, {
+    // You can specify more restrictive CORS options here if needed,
+    // e.g., 'origin: "http://localhost:3001"'
+});
+
+/**
+ * Checks the local SQLite cache for a pre-existing combination of two words.
+ * It searches for both (word1, word2) and (word2, word1) order to ensure cache hit.
+ * The 'emoji' field is no longer selected.
+ * @param {string} firstWord - The first word (element) to check.
+ * @param {string} secondWord - The second word (element) to check.
+ * @returns {Promise<object | undefined>} Cached result with 'result' property, or undefined if not found.
+ */
 async function craftNewWordFromCache(firstWord, secondWord) {
-    let cachedResult = await db.get('SELECT result, emoji FROM word_cache WHERE first_word = ? AND second_word = ?', [firstWord, secondWord]);
+    let cachedResult = await db.get('SELECT result FROM word_cache WHERE first_word = ? AND second_word = ?', [firstWord, secondWord]);
 
     if (cachedResult) {
         return cachedResult;
     }
 
-    cachedResult = await db.get('SELECT result, emoji FROM word_cache WHERE first_word = ? AND second_word = ?', [secondWord, firstWord]);
+    // Check the reverse order if not found in the first order
+    cachedResult = await db.get('SELECT result FROM word_cache WHERE first_word = ? AND second_word = ?', [secondWord, firstWord]);
 
     return cachedResult;
 }
 
-async function cacheNewWord(firstWord, secondWord, result, emoji) {
-    await db.run('INSERT INTO word_cache (first_word, second_word, result, emoji) VALUES (?, ?, ?, ?)', [firstWord, secondWord, result, emoji]);
+/**
+ * Caches a new word combination along with its result.
+ * The 'emoji' parameter and column are no longer used.
+ * @param {string} firstWord - The first word of the combination.
+ * @param {string} secondWord - The second word of the combination.
+ * @param {string} result - The crafted word/result from the AI.
+ * @returns {Promise<void>}
+ */
+async function cacheNewWord(firstWord, secondWord, result) { // Removed emoji parameter
+    await db.run('INSERT INTO word_cache (first_word, second_word, result) VALUES (?, ?, ?)', [firstWord, secondWord, result]); // Removed emoji column
 }
 
-// async function craftNewWord(firstWord, secondWord) {
-//     const cachedResult = await craftNewWordFromCache(firstWord, secondWord);
-//     if (cachedResult) {
-//         return cachedResult;
-//     }
-
-//     console.log(firstWord, secondWord);
-//     const __dirname = path.dirname(fileURLToPath(import.meta.url));
-//     const model = new LlamaModel({
-//         modelPath: path.join(__dirname, "models", "mistral-7b-instruct-v0.1.Q8_0.gguf"),
-//     });
-//     const context = new LlamaContext({model, seed: 0});
-//     const session = new LlamaChatSession({context});
-
-//     const grammar = new LlamaJsonSchemaGrammar({
-//         "type": "object",
-//         "properties": {
-//             "answer": {
-//                 "type": "string"
-//             },
-//         }
-//     });
-
-//     const result = await generateWord(firstWord, secondWord, session, grammar, context);
-
-//     await cacheNewWord(firstWord, secondWord, result.result, result.emoji);
-
-//     return result;
-// }
+/**
+ * Crafts a new word by combining two input words/elements using the Gemini API.
+ * It prioritizes fetching from the cache to reduce API calls and improve performance.
+ * If not in cache, it calls Gemini and then stores the result in cache.
+ * The returned object no longer includes an 'emoji' field.
+ * @param {string} firstWord - The first word (element) to combine.
+ * @param {string} secondWord - The second word (element) to combine.
+ * @returns {Promise<object>} An object containing only the 'result'. Returns '???' if an error occurs.
+ */
 async function craftNewWord(firstWord, secondWord) {
-    // Check cache
+    // Attempt to retrieve result from cache first
     const cachedResult = await craftNewWordFromCache(firstWord, secondWord);
     if (cachedResult) {
         return cachedResult;
     }
 
-    console.log("Calling Gemini API for:", firstWord, secondWord);
+    // If not in cache, call the Gemini API
+    console.log(`Calling Gemini API for: ${firstWord} and ${secondWord}`);
 
     try {
-        const prompt = "You are a chemistry simulation assistant. When given two chemical elements or compounds, return a plausible resulting compound or concept in a fun chemistry crafting game.What do you get when you combine "+firstWord+" and "+secondWord+"?. Give me a one word answer, do not reply to me using a paragraph. I just need one word answers from you"
+        // Construct the prompt for the Gemini model
+        const prompt = `You are a chemistry simulation assistant. When given two chemical elements or compounds, return a plausible resulting compound or concept in a fun chemistry crafting game.
+        What do you get when you combine "${firstWord}" and "${secondWord}"?
+        Give me a **one-word answer**, do not reply to me using a paragraph. I just need one word from you.`
         ;
 
         const result = await model.generateContent(prompt);
         const response = await result.response;
         const answer = response.text().trim();
-        const emoji = ""; // Optional: you can make another Gemini call or use a local mapping to generate an emoji
+        // const emoji = ""; // Emoji generation is removed
 
-        // Save to DB cache
-        await cacheNewWord(firstWord, secondWord, answer, emoji);
+        // Cache the new result before returning (removed emoji from cache call)
+        await cacheNewWord(firstWord, secondWord, answer);
 
         return {
-            result: answer,
-            emoji: emoji
+            result: answer
+            // emoji: emoji // Removed emoji from return
         };
 
     } catch (err) {
         console.error("Error calling Gemini API:", err);
+        // Return a default error response if the API call fails
         return {
-            result: "???",
-            emoji: ""
+            result: "???"
+            // emoji: "" // Removed emoji from error return
         };
     }
 }
-// async function generateWord(firstWord, secondWord, session, grammar, context) {
-//     const systemPrompt =
-//         'You are a helpful assistant that helps people to craft new things by combining two words into a new word. ' +
-//         'The most important rules that you have to follow with every single answer that you are not allowed to use the words ' + firstWord + " and " + secondWord + ' as part of your answer and that you are only allowed to answer with one thing. ' +
-//         'DO NOT INCLUDE THE WORDS ' + firstWord + " and " + secondWord + ' as part of the answer!!!!! The words ' + firstWord + " and " + secondWord + ' may NOT be part of the answer. ' +
-//         'No sentences, no phrases, no multiple words, no punctuation, no special characters, no numbers, no emojis, no URLs, no code, no commands, no programming' +
-//         'The answer has to be a noun. ' +
-//         'The order of the both words does not matter, both are equally important. ' +
-//         'The answer has to be related to both words and the context of the words. ' +
-//         'The answer can either be a combination of the words or the role of one word in relation to the other. ' +
-//         'Answers can be things, materials, people, companies, animals, occupations, food, places, objects, emotions, events, concepts, natural phenomena, body parts, vehicles, sports, clothing, furniture, technology, buildings, technology, instruments, beverages, plants, academic subjects and everything else you can think of that is a noun.'
 
-//     const emojiSystemPrompt = 'Reply with one emoji the word. Use the UTF-8 encoding.';
-//     const answerPrompt = 'Reply with the result of what would happen if you combine ' + firstWord + " and " + secondWord + '. The answer has to be related to both words and the context of the words and may not contain the words themselves. '
-
-//     const q1 = firstWord + " and " + secondWord + " . ";
-
-//     const promp = '<s>[INST] ' +
-//         systemPrompt +
-//         answerPrompt + '[/INST]</s>\n';
-
-//     const result = await session.prompt(promp, {
-//         grammar,
-//         maxTokens: context.getContextSize()
-//     });
-
-
-//     const emojiPrompt = '<s>[INST] ' +
-//         emojiSystemPrompt +
-//         JSON.parse(result).answer + '[/INST]</s>\n';
-
-//     const emojiResult = await session.prompt(emojiPrompt, {
-//         grammar,
-//         maxTokens: context.getContextSize()
-//     });
-
-//     if (JSON.parse(result).answer.toLowerCase().trim().split(' ').length > 3 ||
-//         (JSON.parse(result).answer.toLowerCase().includes(firstWord.toLowerCase()) &&
-//             JSON.parse(result).answer.toLowerCase().includes(secondWord.toLowerCase()) &&
-//             JSON.parse(result).answer.length < (firstWord.length + secondWord.length + 2))
-//     ) {
-//         return {result: '', emoji: ''}
-//     }
-//     return {result: capitalizeFirstLetter(JSON.parse(result).answer), emoji: JSON.parse(emojiResult).answer}
-// }
-
+/**
+ * Helper function to capitalize the first letter of a string.
+ * Ensures consistent casing for element names, especially for cache lookups.
+ * @param {string} string - The input string.
+ * @returns {string} The string with its first letter capitalized, or an empty string if input is null/empty.
+ */
 function capitalizeFirstLetter(string) {
+    if (!string) return '';
     return string.charAt(0).toUpperCase() + string.slice(1);
 }
 
+// --- API Routes ---
 
+/**
+ * GET /
+ * This route returns pre-selected combinations of periodic table elements.
+ * IMPORTANT: If your frontend expects specific keys like "Water + Fire",
+ * you WILL need to update your frontend to handle the new keys (e.g., "Hydrogen + Oxygen")
+ * and to no longer expect an 'emoji' property.
+ */
 fastify.route({
     method: 'GET',
     url: '/',
     schema: {
-        // the response needs to be an object with an `hello` property of type 'string'
         response: {
             200: {
                 type: 'object',
-                properties: {
-                    'Water + Fire': {type: 'string'},
-                    'Water + Earth': {type: 'string'},
-                    'Fire + Earth': {type: 'string'},
-                    'Water + Air': {type: 'string'},
-                    'Earth + Air': {type: 'string'},
-                    'Fire + Air': {type: 'string'}
+                // This allows any string as a key, and ensures the value matches the { result } structure
+                additionalProperties: {
+                    type: 'object',
+                    properties: {
+                        result: { type: 'string' }
+                    },
+                    required: ['result']
                 }
             }
         },
     },
-    // this function is executed for every request before the handler is executed
     preHandler: async (request, reply) => {
-        // E.g. check authentication
+        // Your authentication logic or other pre-processing could go here
     },
     handler: async (request, reply) => {
-        reply.type('application/json').code(200)
+        reply.type('application/json').code(200);
 
+        // New combinations using common periodic table elements
         return {
-            'Water + Fire': (await craftNewWord('Water', 'Fire')),
-            'Water + Earth': (await craftNewWord('Water', 'Earth')),
-            'Fire + Earth': (await craftNewWord('Fire', 'Earth')),
-            'Water + Air': (await craftNewWord('Water', 'Air')),
-            'Earth + Air': (await craftNewWord('Earth', 'Air')),
-            'Fire + Air': (await craftNewWord('Fire', 'Air'))
-        }
+            'Hydrogen + Oxygen': (await craftNewWord('Hydrogen', 'Oxygen')),
+            'Sodium + Chlorine': (await craftNewWord('Sodium', 'Chlorine')),
+            'Carbon + Oxygen': (await craftNewWord('Carbon', 'Oxygen')),
+            'Iron + Oxygen': (await craftNewWord('Iron', 'Oxygen')),
+            'Silicon + Oxygen': (await craftNewWord('Silicon', 'Oxygen')),
+            'Nitrogen + Hydrogen': (await craftNewWord('Nitrogen', 'Hydrogen'))
+        };
     }
-})
+});
 
+/**
+ * POST /
+ * This route allows combining any two elements (or words) provided in the request body.
+ * The response will contain the 'result' only.
+ */
 fastify.route({
     method: 'POST',
     url: '/',
     schema: {
-        // the response needs to be an object with an `hello` property of type 'string'
+        body: {
+            type: 'object',
+            required: ['first', 'second'],
+            properties: {
+                first: {type: 'string'},
+                second: {type: 'string'}
+            }
+        },
         response: {
             200: {
                 type: 'object',
                 properties: {
-                    result: {type: 'string'},
-                    emoji: {type: 'string'}
+                    result: {type: 'string'}
                 }
             }
         }
     },
-    // this function is executed for every request before the handler is executed
     preHandler: async (request, reply) => {
-        // E.g. check authentication
+        // Your authentication logic or other pre-processing could go here
     },
     handler: async (request, reply) => {
-
         if (!request?.body?.first || !request?.body?.second) {
+            reply.code(400).send({ message: 'Missing "first" or "second" element in request body.' });
             return;
         }
 
         const firstWord = capitalizeFirstLetter(request.body.first.trim().toLowerCase());
         const secondWord = capitalizeFirstLetter(request.body.second.trim().toLowerCase());
-        reply.type('application/json').code(200)
+        reply.type('application/json').code(200);
 
-        return await craftNewWord(firstWord, secondWord)
+        return await craftNewWord(firstWord, secondWord);
     }
-})
+});
 
+// --- Server Initialization ---
 try {
-    await fastify.listen({port: 3000, host: '0.0.0.0'})
+    await fastify.listen({ port: 3000, host: '0.0.0.0' });
+    console.log(`Server listening on http://0.0.0.0:3000`);
 } catch (err) {
-    fastify.log.error(err)
-    process.exit(1)
+    fastify.log.error(err);
+    process.exit(1);
 }
