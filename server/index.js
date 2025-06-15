@@ -5,6 +5,18 @@ import { fileURLToPath } from "url";
 import path from "path";
 import { LlamaChatSession, LlamaContext, LlamaJsonSchemaGrammar, LlamaModel } from "node-llama-cpp";
 import cors from '@fastify/cors'
+import { OpenAI } from 'openai';
+import dotenv from "dotenv";
+dotenv.config()
+import { GoogleGenerativeAI } from '@google/generative-ai'
+
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+// const model = genAI.getGenerativeModel({ model: "gemini-pro" });
+
+// const openai=new OpenAI({
+//     apiKey:process.env.OPENAI_API_KEY
+// });
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -53,81 +65,114 @@ async function cacheNewWord(firstWord, secondWord, result, emoji) {
     await db.run('INSERT INTO word_cache (first_word, second_word, result, emoji) VALUES (?, ?, ?, ?)', [firstWord, secondWord, result, emoji]);
 }
 
+// async function craftNewWord(firstWord, secondWord) {
+//     const cachedResult = await craftNewWordFromCache(firstWord, secondWord);
+//     if (cachedResult) {
+//         return cachedResult;
+//     }
+
+//     console.log(firstWord, secondWord);
+//     const __dirname = path.dirname(fileURLToPath(import.meta.url));
+//     const model = new LlamaModel({
+//         modelPath: path.join(__dirname, "models", "mistral-7b-instruct-v0.1.Q8_0.gguf"),
+//     });
+//     const context = new LlamaContext({model, seed: 0});
+//     const session = new LlamaChatSession({context});
+
+//     const grammar = new LlamaJsonSchemaGrammar({
+//         "type": "object",
+//         "properties": {
+//             "answer": {
+//                 "type": "string"
+//             },
+//         }
+//     });
+
+//     const result = await generateWord(firstWord, secondWord, session, grammar, context);
+
+//     await cacheNewWord(firstWord, secondWord, result.result, result.emoji);
+
+//     return result;
+// }
 async function craftNewWord(firstWord, secondWord) {
+    // Check cache
     const cachedResult = await craftNewWordFromCache(firstWord, secondWord);
     if (cachedResult) {
         return cachedResult;
     }
 
-    console.log(firstWord, secondWord);
-    const __dirname = path.dirname(fileURLToPath(import.meta.url));
-    const model = new LlamaModel({
-        modelPath: path.join(__dirname, "models", "mistral-7b-instruct-v0.1.Q8_0.gguf"),
-    });
-    const context = new LlamaContext({model, seed: 0});
-    const session = new LlamaChatSession({context});
+    console.log("Calling Gemini API for:", firstWord, secondWord);
 
-    const grammar = new LlamaJsonSchemaGrammar({
-        "type": "object",
-        "properties": {
-            "answer": {
-                "type": "string"
-            },
-        }
-    });
+    try {
+        const prompt = "You are a chemistry simulation assistant. When given two chemical elements or compounds, return a plausible resulting compound or concept in a fun chemistry crafting game.What do you get when you combine "+firstWord+" and "+secondWord+"?. Give me a one word answer, do not reply to me using a paragraph. I just need one word answers from you"
+        ;
 
-    const result = await generateWord(firstWord, secondWord, session, grammar, context);
+        const result = await model.generateContent(prompt);
+        const response = await result.response;
+        const answer = response.text().trim();
+        const emoji = ""; // Optional: you can make another Gemini call or use a local mapping to generate an emoji
 
-    await cacheNewWord(firstWord, secondWord, result.result, result.emoji);
+        // Save to DB cache
+        await cacheNewWord(firstWord, secondWord, answer, emoji);
 
-    return result;
-}
+        return {
+            result: answer,
+            emoji: emoji
+        };
 
-async function generateWord(firstWord, secondWord, session, grammar, context) {
-    const systemPrompt =
-        'You are a helpful assistant that helps people to craft new things by combining two words into a new word. ' +
-        'The most important rules that you have to follow with every single answer that you are not allowed to use the words ' + firstWord + " and " + secondWord + ' as part of your answer and that you are only allowed to answer with one thing. ' +
-        'DO NOT INCLUDE THE WORDS ' + firstWord + " and " + secondWord + ' as part of the answer!!!!! The words ' + firstWord + " and " + secondWord + ' may NOT be part of the answer. ' +
-        'No sentences, no phrases, no multiple words, no punctuation, no special characters, no numbers, no emojis, no URLs, no code, no commands, no programming' +
-        'The answer has to be a noun. ' +
-        'The order of the both words does not matter, both are equally important. ' +
-        'The answer has to be related to both words and the context of the words. ' +
-        'The answer can either be a combination of the words or the role of one word in relation to the other. ' +
-        'Answers can be things, materials, people, companies, animals, occupations, food, places, objects, emotions, events, concepts, natural phenomena, body parts, vehicles, sports, clothing, furniture, technology, buildings, technology, instruments, beverages, plants, academic subjects and everything else you can think of that is a noun.'
-
-    const emojiSystemPrompt = 'Reply with one emoji the word. Use the UTF-8 encoding.';
-    const answerPrompt = 'Reply with the result of what would happen if you combine ' + firstWord + " and " + secondWord + '. The answer has to be related to both words and the context of the words and may not contain the words themselves. '
-
-    const q1 = firstWord + " and " + secondWord + " . ";
-
-    const promp = '<s>[INST] ' +
-        systemPrompt +
-        answerPrompt + '[/INST]</s>\n';
-
-    const result = await session.prompt(promp, {
-        grammar,
-        maxTokens: context.getContextSize()
-    });
-
-
-    const emojiPrompt = '<s>[INST] ' +
-        emojiSystemPrompt +
-        JSON.parse(result).answer + '[/INST]</s>\n';
-
-    const emojiResult = await session.prompt(emojiPrompt, {
-        grammar,
-        maxTokens: context.getContextSize()
-    });
-
-    if (JSON.parse(result).answer.toLowerCase().trim().split(' ').length > 3 ||
-        (JSON.parse(result).answer.toLowerCase().includes(firstWord.toLowerCase()) &&
-            JSON.parse(result).answer.toLowerCase().includes(secondWord.toLowerCase()) &&
-            JSON.parse(result).answer.length < (firstWord.length + secondWord.length + 2))
-    ) {
-        return {result: '', emoji: ''}
+    } catch (err) {
+        console.error("Error calling Gemini API:", err);
+        return {
+            result: "???",
+            emoji: ""
+        };
     }
-    return {result: capitalizeFirstLetter(JSON.parse(result).answer), emoji: JSON.parse(emojiResult).answer}
 }
+// async function generateWord(firstWord, secondWord, session, grammar, context) {
+//     const systemPrompt =
+//         'You are a helpful assistant that helps people to craft new things by combining two words into a new word. ' +
+//         'The most important rules that you have to follow with every single answer that you are not allowed to use the words ' + firstWord + " and " + secondWord + ' as part of your answer and that you are only allowed to answer with one thing. ' +
+//         'DO NOT INCLUDE THE WORDS ' + firstWord + " and " + secondWord + ' as part of the answer!!!!! The words ' + firstWord + " and " + secondWord + ' may NOT be part of the answer. ' +
+//         'No sentences, no phrases, no multiple words, no punctuation, no special characters, no numbers, no emojis, no URLs, no code, no commands, no programming' +
+//         'The answer has to be a noun. ' +
+//         'The order of the both words does not matter, both are equally important. ' +
+//         'The answer has to be related to both words and the context of the words. ' +
+//         'The answer can either be a combination of the words or the role of one word in relation to the other. ' +
+//         'Answers can be things, materials, people, companies, animals, occupations, food, places, objects, emotions, events, concepts, natural phenomena, body parts, vehicles, sports, clothing, furniture, technology, buildings, technology, instruments, beverages, plants, academic subjects and everything else you can think of that is a noun.'
+
+//     const emojiSystemPrompt = 'Reply with one emoji the word. Use the UTF-8 encoding.';
+//     const answerPrompt = 'Reply with the result of what would happen if you combine ' + firstWord + " and " + secondWord + '. The answer has to be related to both words and the context of the words and may not contain the words themselves. '
+
+//     const q1 = firstWord + " and " + secondWord + " . ";
+
+//     const promp = '<s>[INST] ' +
+//         systemPrompt +
+//         answerPrompt + '[/INST]</s>\n';
+
+//     const result = await session.prompt(promp, {
+//         grammar,
+//         maxTokens: context.getContextSize()
+//     });
+
+
+//     const emojiPrompt = '<s>[INST] ' +
+//         emojiSystemPrompt +
+//         JSON.parse(result).answer + '[/INST]</s>\n';
+
+//     const emojiResult = await session.prompt(emojiPrompt, {
+//         grammar,
+//         maxTokens: context.getContextSize()
+//     });
+
+//     if (JSON.parse(result).answer.toLowerCase().trim().split(' ').length > 3 ||
+//         (JSON.parse(result).answer.toLowerCase().includes(firstWord.toLowerCase()) &&
+//             JSON.parse(result).answer.toLowerCase().includes(secondWord.toLowerCase()) &&
+//             JSON.parse(result).answer.length < (firstWord.length + secondWord.length + 2))
+//     ) {
+//         return {result: '', emoji: ''}
+//     }
+//     return {result: capitalizeFirstLetter(JSON.parse(result).answer), emoji: JSON.parse(emojiResult).answer}
+// }
 
 function capitalizeFirstLetter(string) {
     return string.charAt(0).toUpperCase() + string.slice(1);
