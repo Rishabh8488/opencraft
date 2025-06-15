@@ -6,10 +6,11 @@ import axios from "axios";
 import { useResourcesStore } from "@/stores/useResourcesStore";
 import { storeToRefs } from "pinia";
 import { twMerge } from "tailwind-merge";
+import { onMounted, watch } from 'vue';
 
 interface LocalDragItem {
-    id: string;
-    title: string;
+    id: string; // For existing boxes, this is the unique ID; for new resources, this is the title
+    title?: string; // Explicitly add title here for consistency, though item.id often serves this for new resources
 }
 
 const props = defineProps<{
@@ -23,30 +24,57 @@ const { removeBox, addBox } = store;
 const { resources } = storeToRefs(useResourcesStore());
 const { addResource } = useResourcesStore();
 
+// --- DEBUGGING CONSOLE LOGS START ---
+onMounted(() => {
+  console.log(`ItemCard Mounted: ID=${props.id}, Title=${props.title}, Size=${props.size}`);
+});
+
+watch(() => props.title, (newTitle) => {
+  console.log(`ItemCard Title Changed: ID=${props.id}, New Title=${newTitle}`);
+});
+
+watch(() => props.size, (newSize) => {
+  console.log(`ItemCard Size Changed: ID=${props.id}, New Size=${newSize}`);
+});
+// --- DEBUGGING CONSOLE LOGS END ---
+
+
 const [, drop] = useDrop(() => ({
     accept: ItemTypes.BOX,
     async drop(item: LocalDragItem, monitor) {
-        if (props.id && item.id !== props.id) {
-            const droppedId = item?.id;
-            const secondTitle = store.boxes[droppedId]?.title ?? item?.title;
+        console.log('ItemCard Drop Handler: Item dropped ONTO this card.', { targetCardId: props.id, targetCardTitle: props.title, droppedItemId: item.id, droppedItemType: monitor.getItemType() }); // Added droppedItemType for more info
 
-            if (droppedId) {
-                removeBox(droppedId);
+        // Check if the dragged item is different from the target item AND is not null/undefined
+        if (props.id && item.id !== props.id) {
+            // Determine the title of the item being dropped.
+            // If it's an existing box, get its title from the store.
+            // If it's a new resource from the sidebar, its 'id' property *is* its title.
+            const droppedItemTitle = store.boxes[item.id]?.title ?? item.id; // Corrected logic here
+
+            if (item.id) { // Ensure item.id is valid before attempting removal for existing boxes
+                // If the dropped item IS an existing box (has a store.boxes entry), remove it.
+                // Otherwise, it's a new resource from the sidebar, so don't try to remove it from boxes yet.
+                if (store.boxes[item.id]) {
+                    removeBox(item.id);
+                }
             }
             if (props.id && store.boxes[props.id]) {
                 store.boxes[props.id].loading = true;
             }
 
-
+            console.log(`Axios Request: Combining '${props.title}' with '${droppedItemTitle}'`);
             const response = await axios.post('http://127.0.0.1:3000/', {
                 first: props.title,
-                second: secondTitle
+                second: droppedItemTitle // Use the correctly determined title here
             });
 
             const resultAnswer = response.data.result !== '' ? response.data.result : props.title;
+            console.log(`Axios Response: Result='${response.data.result}', Final Title='${resultAnswer}'`);
+
 
             const newBoxId = Math.random().toString(36).substring(2, 7);
 
+            console.log(`Adding New Combined Box: ID=${newBoxId}, Title='${resultAnswer}'`);
             addBox({
                 id: newBoxId,
                 title: resultAnswer,
@@ -60,8 +88,10 @@ const [, drop] = useDrop(() => ({
                 });
             }
             if (props.id) {
-                removeBox(props.id);
+                removeBox(props.id); // Remove the target box
             }
+        } else {
+            console.log("ItemCard Drop Handler: Dropped item is the same as target, or target ID is missing, or item ID is missing.");
         }
     },
 }));

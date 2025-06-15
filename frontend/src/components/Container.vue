@@ -17,11 +17,15 @@ const [, drop] = useDrop(() => ({
   drop: (item: { id: string }, monitor) => {
     const delta = monitor.getDifferenceFromInitialOffset() as { x: number; y: number }
 
+    console.log('Container Drop Handler: Dropped Item ID:', item.id, 'Delta:', delta);
+
+
     if (item.id && store.boxes[item.id]) {
       const left = Math.round(store.boxes[item.id].left + delta.x)
       const top = Math.round(store.boxes[item.id].top + delta.y)
       store.boxes[item.id].left = left
       store.boxes[item.id].top = top
+      console.log(`Container: Moved existing box <span class="math-inline">\{item\.id\} to L\:</span>{left}, T:${top}`);
     } else {
       const clientOffset = monitor.getClientOffset()
       if (containerElement.value && clientOffset) {
@@ -29,12 +33,13 @@ const [, drop] = useDrop(() => ({
         const newLeft = clientOffset.x - containerRect.left
         const newTop = clientOffset.y - containerRect.top
 
-        const newId = Math.random().toString(36).substring(2, 7)
+        const newId = Math.random().toString(36).substring(2, 7);
+        console.log(`Container: Adding new box from sidebar. ID:<span class="math-inline">\{newId\}, Title\:</span>{item.id}, Pos: L:<span class="math-inline">\{newLeft\}, T\:</span>{newTop}`);
         addBox({
           id: newId,
           top: newTop,
           left: newLeft,
-          title: item.id
+          title: item.id // This 'item.id' is the title from AvailableResources
         })
       }
     }
@@ -57,6 +62,7 @@ const [, drop] = useDrop(() => ({
             :top="value.top"
             :loading="value.loading"
           >
+            {{ console.log(`Rendering Box: ID=<span class="math-inline">\{value\.id\}, Title\=</span>{value.title}`) }}
             <ItemCard size="large" :id="value.id" :title="value.title"/>
           </Box>
         </div>
@@ -77,6 +83,4 @@ const [, drop] = useDrop(() => ({
   position: relative;
   border-radius: 8px;
 }
-/* IMPORTANT: Ensure no 'background-color' is set for .container here,
-   as it would override Tailwind. */
 </style>

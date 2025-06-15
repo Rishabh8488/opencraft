@@ -14,7 +14,7 @@ const { toggleDarkMode } = themeStore;
       <div class="flex items-center space-x-3">
         <div class="border-2 border-gray-200 shadow-sm px-2.5 rounded-lg py-1 text-gray-500 text-xl font-semibold dark:border-gray-700 dark:text-gray-200">
           <span
-              class="text-sky-400">Open</span>Craft
+              class="text-sky-400">Chem</span>Craft
         </div>
       </div>
       <nav class="flex space-x-5">
