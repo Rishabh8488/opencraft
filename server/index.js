@@ -124,10 +124,10 @@ async function craftNewWord(firstWord, secondWord) {
 
     try {
         // MODIFIED: New prompt to guide Gemini for chemical formulas
-        const prompt = `You are an expert chemist and a chemical reaction simulator.
-        Your task is to predict the most plausible and simplest chemical formula (e.g., H2O, NaCl, CO2, NH3) when two chemical elements or simple compounds are combined.
-        Provide ONLY the resulting chemical formula. Do NOT include any additional text, explanations, balancing numbers (like "2" in "2H2O"), or conversational phrases.
-        If no common, stable compound is formed, respond with "No reaction".
+       const prompt = `You are an expert chemist and a chemical reaction simulator for a simple crafting game.
+        Your task is to predict the *simplest and most plausible chemical formula* that results from combining two chemical elements or very simple compounds.
+        Provide ONLY the resulting chemical formula. Do NOT include any additional text, explanations, or balancing numbers.
+        If the combination does not form a *single, common, stable, simple compound* under typical game-like conditions, respond with "NoRxn" as a single word. Avoid predicting complex, multi-product, or high-energy reactions for this game.
 
         Examples:
         Input: "H" and "O" -> Output: "H2O"
@@ -135,11 +135,13 @@ async function craftNewWord(firstWord, secondWord) {
         Input: "C" and "O" -> Output: "CO2"
         Input: "Fe" and "O" -> Output: "Fe2O3"
         Input: "N" and "H" -> Output: "NH3"
-        Input: "He" and "Ne" -> Output: "No reaction"
-        Input: "H2O" and "C" -> Output: "No reaction"
+        Input: "He" and "Ne" -> Output: "NoRxn"
+        Input: "H2O" and "C" -> Output: "NoRxn"
+        Input: "CO2" and "H2O" -> Output: "H2CO3"
+        Input: "NaCl" and "H2O" -> Output: "NoRxn"
 
         What is the primary chemical formula when you combine "${firstWord}" and "${secondWord}"?
-        Provide only the chemical formula.`;
+        Provide only the chemical formula or "NoRxn".`;
 
 
         const result = await model.generateContent(prompt);
@@ -276,7 +278,9 @@ fastify.route({
 
 // --- Server Initialization ---
 try {
-    await fastify.listen({ port: 3000, host: '0.0.0.0' });
+    const PORT = process.env.PORT || 3000;
+    // fastify.listen({ port: PORT, host: '0.0.0.0' });
+    await fastify.listen({ port: PORT, host: '0.0.0.0' });
     console.log(`Server listening on http://0.0.0.0:3000`);
 } catch (err) {
     fastify.log.error(err);
