@@ -53,14 +53,14 @@ await fastify.register(cors, {
   credentials: true
 });
 
-fastify.options('/*', async (request, reply) => {
-  reply
-    .header("Access-Control-Allow-Origin", request.headers.origin || "*")
-    .header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-    .header("Access-Control-Allow-Headers", "Content-Type")
-    .status(204)
-    .send();
-});
+// fastify.options('/*', async (request, reply) => {
+//   reply
+//     .header("Access-Control-Allow-Origin", request.headers.origin || "*")
+//     .header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+//     .header("Access-Control-Allow-Headers", "Content-Type")
+//     .status(204)
+//     .send();
+// });
 
 async function craftNewWordFromCache(firstWord, secondWord) {
     let cachedResult = await db.get('SELECT result FROM word_cache WHERE first_word = ? AND second_word = ?', [firstWord, secondWord]);
