@@ -1,4 +1,3 @@
-// app.js
 import Fastify from 'fastify';
 import sqlite3 from 'sqlite3';
 import { open } from 'sqlite';
@@ -39,6 +38,7 @@ const fastify = Fastify({
     requestTimeout: 60 * 1000
 });
 
+// ✅ Allow only your frontend
 await fastify.register(cors, {
   origin: (origin, cb) => {
     const allowedOrigins = ["https://opencraft-teal.vercel.app"];
@@ -49,18 +49,10 @@ await fastify.register(cors, {
     }
   },
   methods: ['GET', 'POST', 'OPTIONS'],
-  allowedHeaders: ['Content-Type'],
   credentials: true
 });
 
-// fastify.options('/*', async (request, reply) => {
-//   reply
-//     .header("Access-Control-Allow-Origin", request.headers.origin || "*")
-//     .header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-//     .header("Access-Control-Allow-Headers", "Content-Type")
-//     .status(204)
-//     .send();
-// });
+// Removed the old `fastify.options('/*')` block to prevent `FST_ERR_DUPLICATED_ROUTE`
 
 async function craftNewWordFromCache(firstWord, secondWord) {
     let cachedResult = await db.get('SELECT result FROM word_cache WHERE first_word = ? AND second_word = ?', [firstWord, secondWord]);
@@ -80,8 +72,9 @@ async function craftNewWord(firstWord, secondWord) {
     console.log(`Calling Gemini API for: ${firstWord} and ${secondWord}`);
 
     try {
-        const prompt = `You are an expert chemist and a chemical reaction simulator for a simple crafting game. Your task is to predict the *simplest and most plausible chemical formula* that results from combining two chemical elements or very simple compounds. Provide ONLY the resulting chemical formula. Do NOT include any additional text, explanations, or balancing numbers. If the combination does not form a *single, common, stable, simple compound* under typical game-like conditions, respond with \"NoRxn\" as a single word.` +
-        `\n\nWhat is the primary chemical formula when you combine \"${firstWord}\" and \"${secondWord}\"?\nProvide only the chemical formula or \"NoRxn\".`;
+        const prompt = `You are an expert chemist and a chemical reaction simulator for a simple crafting game. Your task is to predict the *simplest and most plausible chemical formula* that results from combining two chemical elements or very simple compounds. Provide ONLY the resulting chemical formula. Do NOT include any additional text, explanations, or balancing numbers. If the combination does not form a *single, common, stable, simple compound* under typical game-like conditions, respond with "NoRxn" as a single word.
+
+What is the primary chemical formula when you combine "${firstWord}" and "${secondWord}"? Provide only the chemical formula or "NoRxn".`;
 
         const result = await model.generateContent(prompt);
         const response = await result.response;
@@ -107,65 +100,33 @@ function capitalizeFirstLetter(string) {
     return trimmedString.length === 0 ? '' : trimmedString.charAt(0).toUpperCase() + trimmedString.slice(1);
 }
 
-fastify.route({
-    method: 'GET',
-    url: '/',
-    handler: async (request, reply) => {
-        reply
-          .type('application/json')
-          .header("Access-Control-Allow-Origin", "https://opencraft-teal.vercel.app")
-          .code(200);
+// --- ROUTES ---
 
-        return {
-            'H + O': await craftNewWord('H', 'O'),
-            'Na + Cl': await craftNewWord('Na', 'Cl'),
-            'C + O': await craftNewWord('C', 'O'),
-            'Fe + O': await craftNewWord('Fe', 'O'),
-            'Si + O': await craftNewWord('Si', 'O'),
-            'N + H': await craftNewWord('N', 'H')
-        };
-    }
+fastify.get('/', async (request, reply) => {
+    return {
+        'H + O': await craftNewWord('H', 'O'),
+        'Na + Cl': await craftNewWord('Na', 'Cl'),
+        'C + O': await craftNewWord('C', 'O'),
+        'Fe + O': await craftNewWord('Fe', 'O'),
+        'Si + O': await craftNewWord('Si', 'O'),
+        'N + H': await craftNewWord('N', 'H')
+    };
 });
 
-fastify.route({
-    method: 'POST',
-    url: '/',
-    schema: {
-        body: {
-            type: 'object',
-            required: ['first', 'second'],
-            properties: {
-                first: {type: 'string'},
-                second: {type: 'string'}
-            }
-        },
-        response: {
-            200: {
-                type: 'object',
-                properties: {
-                    result: {type: 'string'}
-                }
-            }
-        }
-    },
-    handler: async (request, reply) => {
-        const { first, second } = request.body;
-        if (!first || !second) {
-            reply.code(400).send({ message: 'Missing "first" or "second" element in request body.' });
-            return;
-        }
-        const firstWord = capitalizeFirstLetter(first);
-        const secondWord = capitalizeFirstLetter(second);
-
-        reply
-          .type('application/json')
-          .header("Access-Control-Allow-Origin", "https://opencraft-teal.vercel.app")
-          .code(200);
-
-        return await craftNewWord(firstWord, secondWord);
+fastify.post('/', async (request, reply) => {
+    const { first, second } = request.body;
+    if (!first || !second) {
+        reply.code(400).send({ message: 'Missing "first" or "second" element in request body.' });
+        return;
     }
+
+    const firstWord = capitalizeFirstLetter(first);
+    const secondWord = capitalizeFirstLetter(second);
+
+    return await craftNewWord(firstWord, secondWord);
 });
 
+// --- SERVER STARTUP ---
 try {
     const PORT = process.env.PORT || 3000;
     await fastify.listen({ port: PORT, host: '0.0.0.0' });
