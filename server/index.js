@@ -78,6 +78,14 @@ await fastify.register(cors, {
   credentials: false
 });
 
+fastify.options('/*', (req, reply) => {
+  reply
+    .header("Access-Control-Allow-Origin", "https://opencraft-teal.vercel.app")
+    .header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+    .header("Access-Control-Allow-Headers", "Content-Type")
+    .send();
+});
+
 /**
  * Checks the local SQLite cache for a pre-existing combination of two words.
  * It searches for both (word1, word2) and (word2, word1) order to ensure cache hit.
