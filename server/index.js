@@ -73,7 +73,7 @@ const fastify = Fastify({
 //     // e.g., 'origin: "http://localhost:3001"'
 // });
 await fastify.register(cors, {
-  origin: ["https://opencraft-teal.vercel.app"], // allow your deployed Vue app
+  origin: ["https://opencraft-teal.vercel.app/"], // allow your deployed Vue app
   methods: ['GET', 'POST', 'OPTIONS'],
   credentials: false
 });
