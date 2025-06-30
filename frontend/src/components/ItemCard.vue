@@ -63,7 +63,7 @@ const [, drop] = useDrop(() => ({
             }
 
             console.log(`Axios Request: Combining '${props.title}' with '${droppedItemTitle}'`);
-            const response = await axios.post('https://opencraft-m4s7.onrender.com', {
+            const response = await axios.post('https://opencraft-qkj8.vercel.app/', {
                 first: props.title,
                 second: droppedItemTitle // Use the correctly determined title here
             });
