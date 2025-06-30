@@ -68,9 +68,14 @@ const fastify = Fastify({
 });
 
 // Register CORS plugin to allow cross-origin requests from your frontend
+// await fastify.register(cors, {
+//     // You can specify more restrictive CORS options here if needed,
+//     // e.g., 'origin: "http://localhost:3001"'
+// });
 await fastify.register(cors, {
-    // You can specify more restrictive CORS options here if needed,
-    // e.g., 'origin: "http://localhost:3001"'
+  origin: ["https://opencraft-teal.vercel.app"], // allow your deployed Vue app
+  methods: ['GET', 'POST', 'OPTIONS'],
+  credentials: false
 });
 
 /**
