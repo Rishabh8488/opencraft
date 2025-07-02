@@ -150,7 +150,7 @@ fastify.post('/', async (request, reply) => {
 const start = async () => {
     try {
         await connectDb(); // Connect to database before starting server
-        await fastify.listen({ port: 3000, host: '0.0.0.0' }); // Listen on 0.0.0.0 for external access
+        await fastify.listen({ port: 8080, host: '0.0.0.0' }); // Listen on 0.0.0.0 for external access
     } catch (err) {
         fastify.log.error(err);
         process.exit(1);
