@@ -1,6 +1,7 @@
 // app.js
 
-require('dotenv').config();
+import dotenv from 'dotenv'; // Change 'require' to 'import'
+dotenv.config();
 const Fastify = require('fastify');
 const cors = require('@fastify/cors');
 const sqlite3 = require('sqlite3');
