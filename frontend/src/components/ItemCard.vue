@@ -21,11 +21,11 @@ const props = defineProps<{
 }>();
 
 const store = useBoxesStore();
-const { removeBox, addBox, markBoxAsOld } = store;
+const { removeBox, addBox, markBoxAsOld } = store; 
 const { resources } = storeToRefs(useResourcesStore());
 const { addResource } = useResourcesStore();
 
-const showAnimation = ref(false); // Reactive state to control animation class
+const showAnimation = ref(false);
 
 onMounted(() => {
   console.log(`[ItemCard] Mounted: ID=${props.id}, Title=${props.title}, Size=${props.size}, isNew=${props.isNew}`);
@@ -38,7 +38,7 @@ watch(() => props.isNew, (newValue) => {
     setTimeout(() => {
       showAnimation.value = false;
       if (props.id) {
-        markBoxAsOld(props.id);
+        markBoxAsOld(props.id); 
       }
       console.log(`[ItemCard] Animation finished and state reset for ID: ${props.id}`);
     }, 600);
@@ -47,41 +47,52 @@ watch(() => props.isNew, (newValue) => {
 
 const [, drop] = useDrop(() => ({
     accept: ItemTypes.BOX,
+    canDrop: (item: LocalDragItem, monitor) => {
+        const canBeDropped = (props.id !== undefined && item.id !== props.id); 
+        console.log(`[ItemCard] canDrop for Target ID: ${props.id}, Dropped Item ID: ${item.id}. Result: ${canBeDropped}`);
+        return canBeDropped;
+    },
+    hover: (item: LocalDragItem, monitor) => {
+        console.log(`[ItemCard] HOVER Target ID: ${props.id}, Dropped Item ID: ${item.id}, isOver: ${monitor.isOver({ shallow: false })}, isOver (shallow): ${monitor.isOver({ shallow: true })}`);
+    },
+    // --- FOCUS ON THIS drop HANDLER ---
     drop: async (item: LocalDragItem, monitor) => {
+        console.log("DEBUG: Drop handler triggered! Item:", item, "Target ID:", props.id);
+        
         const didDrop = monitor.didDrop();
         console.log(`[ItemCard] Drop Handler: Item dropped ONTO this card. Target ID: ${props.id}, Dropped Item ID: ${item.id}, Did Drop on this target: ${didDrop}`);
 
-        if (!didDrop) {
-            console.log(`[ItemCard] Drop Handler: Not the primary drop target. Ignoring.`);
-            return;
-        }
+        // The 'didDrop' check *should* prevent this block from running if another
+        // child component claims the drop, but it's not working as expected.
+        // Let's assume for now that if we get here AND canDrop was true,
+        // this component *should* handle it.
+        // The core issue might be that this handler is returning undefined
+        // for the very first drop, preventing 'didDrop' from ever becoming true.
 
         if (props.id && item.id !== props.id) {
             console.log(`[ItemCard] Combination attempt: target=${props.id}, dropped=${item.id}`);
 
             const droppedItemTitle = store.boxes[item.id]?.title ?? item.id;
-            const targetBox = store.boxes[props.id]; // Get the target box for position
+            const targetBox = store.boxes[props.id];
 
             if (!targetBox) {
                 console.error(`[ItemCard] Target box not found for ID: ${props.id}`);
-                return; // Prevent errors if target box somehow disappears
+                // If targetBox is not found, we cannot handle the drop
+                return undefined; // Explicitly return undefined if not handled
             }
 
-            // Set target box to loading
             store.boxes[props.id].loading = true;
             console.log(`[ItemCard] Setting target box ${props.id} to loading.`);
 
             console.log(`[ItemCard] Axios Request: Combining '${props.title}' with '${droppedItemTitle}'`);
-            const response = await axios.post('http://127.0.0.1:3000/', { // Ensure this URL is correct
+            const response = await axios.post('http://127.0.0.1:3000/', {
                 first: props.title,
                 second: droppedItemTitle
             });
 
-            // response.data.result will now be an array of strings
             const productTitles: string[] = response.data.result;
             console.log(`[ItemCard] Axios Response: Products='${productTitles.join(' + ')}'`);
 
-            // Remove the two input boxes first, regardless of the output
             if (item.id && store.boxes[item.id]) {
                 console.log(`[ItemCard] Removing dropped existing box: ${item.id}`);
                 removeBox(item.id);
@@ -91,26 +102,21 @@ const [, drop] = useDrop(() => ({
                 removeBox(props.id);
             }
 
-            // --- Logic for adding new boxes for each product ---
             let offsetX = 0;
             let offsetY = 0;
-            const offsetIncrement = 30; // Pixels to offset each new box for stacking effect
+            const offsetIncrement = 30;
 
-            // Check if it's a "No reaction" scenario
             if (productTitles.length === 1 && productTitles[0].toLowerCase() === "no reaction") {
-                // If it's explicitly "No reaction", add a single box for it
-                const newBoxId = Math.random().toString(36).substring(2, 7);
+                 const newBoxId = Math.random().toString(36).substring(2, 7);
                  addBox({
                     id: newBoxId,
                     title: "No reaction",
                     left: targetBox.left,
                     top: targetBox.top,
-                    isNew: true, // For animation
+                    isNew: true,
                 });
             } else if (productTitles.length > 0) {
-                // If there are actual products, iterate and add them
                 productTitles.forEach((productTitle: string, index: number) => {
-                    // Only add valid-looking products
                     if (/^(?:[A-Z][a-z]?\d*)+$/.test(productTitle)) {
                         const newBoxId = Math.random().toString(36).substring(2, 7);
                         console.log(`[ItemCard] Adding New Product Box: ID=${newBoxId}, Title='${productTitle}'`);
@@ -120,17 +126,15 @@ const [, drop] = useDrop(() => ({
                             title: productTitle,
                             left: targetBox.left + offsetX,
                             top: targetBox.top + offsetY,
-                            isNew: true, // Mark for animation
+                            isNew: true,
                         });
 
-                        // Add to resources if not already present
                         if (!resources.value.find((resource: { title: string; }) => resource.title === productTitle)) {
                             addResource({
                                 title: productTitle,
                             });
                         }
 
-                        // Increment offset for next box
                         offsetX += offsetIncrement;
                         offsetY += offsetIncrement;
                     } else {
@@ -138,9 +142,8 @@ const [, drop] = useDrop(() => ({
                     }
                 });
             } else {
-                 // Fallback for unexpected empty or invalid results from API
                 const newBoxId = Math.random().toString(36).substring(2, 7);
-                 addBox({
+                addBox({
                     id: newBoxId,
                     title: "???",
                     left: targetBox.left,
@@ -148,10 +151,13 @@ const [, drop] = useDrop(() => ({
                     isNew: true,
                 });
             }
-            // --- End Logic for adding new boxes ---
+            
+            // --- IMPORTANT: ALWAYS RETURN AN OBJECT WHEN THIS TARGET SUCCESSFULLY HANDLES THE DROP ---
+            return {}; 
 
         } else {
-            console.log(`[ItemCard] Drop Handler: Not a combination or invalid target/item ID. Target: ${props.id}, Item: ${item.id}`);
+            console.log(`[ItemCard] Drop Handler: Not a combination or invalid target/item ID. Target: ${props.id}, Item: ${item.id}. Explicitly not handling.`);
+            return undefined; // Explicitly return undefined if not handled
         }
     },
 }));

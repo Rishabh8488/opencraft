@@ -1,12 +1,18 @@
-// app.js
+// app.js (or index.js - assuming this is your main backend file and it's an ES Module)
 
-import dotenv from 'dotenv'; // Change 'require' to 'import'
+import dotenv from 'dotenv';
 dotenv.config();
-const Fastify = require('fastify');
-const cors = require('@fastify/cors');
-const sqlite3 = require('sqlite3');
-const { open } = require('sqlite');
-const { GoogleGenerativeAI } = require('@google/generative-ai');
+
+// All require statements MUST be converted to import statements
+import Fastify from 'fastify';
+import cors from '@fastify/cors';
+import sqlite3 from 'sqlite3';
+import { open } from 'sqlite'; // Note: `open` is a named export from 'sqlite'
+import { GoogleGenerativeAI } from '@google/generative-ai';
+
+// If you actually use 'path' or 'url' later in your code, uncomment these:
+// import path from 'path';
+// import url from 'url';
 
 // Initialize Fastify
 const fastify = Fastify({ logger: true });

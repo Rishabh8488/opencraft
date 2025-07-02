@@ -1,50 +1,52 @@
 // src/stores/useBoxesStore.ts
-import { defineStore } from 'pinia';
-import { reactive, watch } from 'vue';
 
-interface BoxStoreEntry {
+import { defineStore } from 'pinia';
+
+// Define the interface for a Box entry in the store
+export interface BoxStoreEntry {
   id: string;
   top: number;
   left: number;
   title: string;
   loading?: boolean;
-  isNew?: boolean; // <-- ADDED THIS LINE: Makes 'isNew' an optional boolean property
+  isNew?: boolean; 
 }
 
-const STORAGE_KEY = 'chemcraft_boxes';
-
-export const useBoxesStore = defineStore('boxes', () => {
-  const storedBoxes = localStorage.getItem(STORAGE_KEY);
-  const boxes = reactive<{ [id: string]: BoxStoreEntry }>(
-    storedBoxes ? JSON.parse(storedBoxes) : {}
-  );
-
-  watch(boxes, (newBoxes) => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(newBoxes));
-  }, { deep: true });
-
-  function addBox(box: BoxStoreEntry) {
-    // Ensure loading is false when added, and isNew defaults to false if not provided
-    boxes[box.id] = { ...box, loading: false, isNew: box.isNew ?? false };
-  }
-
-  function removeBox(id: string) {
-    if (boxes[id]) {
-      delete boxes[id];
-    }
-  }
-
-  // <-- ADDED THIS FUNCTION: Sets the isNew flag to false for a specific box
-  function markBoxAsOld(id: string) {
-    if (boxes[id]) {
-      boxes[id].isNew = false;
-    }
-  }
-
-  return {
-    boxes,
-    addBox,
-    removeBox,
-    markBoxAsOld // <-- ADDED THIS LINE: Exposes the new function from the store
+interface BoxesState {
+  boxes: {
+    [id: string]: BoxStoreEntry;
   };
+}
+
+export const useBoxesStore = defineStore('boxes', {
+  state: (): BoxesState => ({
+    boxes: {},
+  }),
+  actions: {
+    addBox(box: BoxStoreEntry) {
+      this.boxes[box.id] = box;
+      console.log(`Store: Added box ${box.id} - ${box.title}`);
+    },
+    removeBox(id: string) {
+      delete this.boxes[id];
+      console.log(`Store: Removed box ${id}`);
+    },
+    markBoxAsOld(id: string) { 
+      if (this.boxes[id]) {
+        this.boxes[id].isNew = false;
+        console.log(`Store: Marked box ${id} as old (isNew=false)`);
+      }
+    },
+    setBoxLoading(id: string, isLoading: boolean) {
+      if (this.boxes[id]) {
+        this.boxes[id].loading = isLoading;
+        console.log(`Store: Set box ${id} loading to ${isLoading}`);
+      }
+    },
+    // New action to clear all boxes
+    clearAllBoxes() {
+      this.boxes = {}; // Reset the boxes object to an empty object
+      console.log("Store: All boxes cleared from the board.");
+    }
+  },
 });
