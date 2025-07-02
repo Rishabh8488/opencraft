@@ -1,32 +1,50 @@
-// useBoxesStore.ts (CRITICAL REVISION - ENSURE THESE ARE APPLIED)
+// src/stores/useBoxesStore.ts
+import { defineStore } from 'pinia';
+import { reactive, watch } from 'vue';
 
-import { ref, computed } from 'vue'
-import { defineStore } from 'pinia'
-import {reactive} from "vue";
-
-export interface BoxStoreEntry {
-    top: number
-    left: number
-    id: string; // Keep id as required string
-    title?: string; // THIS MUST BE OPTIONAL (string | undefined)
-    // REMOVED: emoji: string; // THIS MUST BE REMOVED COMPLETELY
-    loading?: boolean
+interface BoxStoreEntry {
+  id: string;
+  top: number;
+  left: number;
+  title: string;
+  loading?: boolean;
+  isNew?: boolean; // <-- ADDED THIS LINE: Makes 'isNew' an optional boolean property
 }
 
-export const useBoxesStore = defineStore('boxes', () => { // Confirm 'boxes' as store name
-  const boxes = reactive<{
-    [key: string]: BoxStoreEntry
-  }>({
-    'a': {id: 'a', top: 20, left: 80, title: 'H'}, // Example initial box
-  })
+const STORAGE_KEY = 'chemcraft_boxes';
+
+export const useBoxesStore = defineStore('boxes', () => {
+  const storedBoxes = localStorage.getItem(STORAGE_KEY);
+  const boxes = reactive<{ [id: string]: BoxStoreEntry }>(
+    storedBoxes ? JSON.parse(storedBoxes) : {}
+  );
+
+  watch(boxes, (newBoxes) => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(newBoxes));
+  }, { deep: true });
 
   function addBox(box: BoxStoreEntry) {
-    boxes[box.id] = box;
+    // Ensure loading is false when added, and isNew defaults to false if not provided
+    boxes[box.id] = { ...box, loading: false, isNew: box.isNew ?? false };
   }
 
   function removeBox(id: string) {
-    delete boxes[id]
+    if (boxes[id]) {
+      delete boxes[id];
+    }
   }
 
-  return { boxes , removeBox, addBox}
-})
+  // <-- ADDED THIS FUNCTION: Sets the isNew flag to false for a specific box
+  function markBoxAsOld(id: string) {
+    if (boxes[id]) {
+      boxes[id].isNew = false;
+    }
+  }
+
+  return {
+    boxes,
+    addBox,
+    removeBox,
+    markBoxAsOld // <-- ADDED THIS LINE: Exposes the new function from the store
+  };
+});
