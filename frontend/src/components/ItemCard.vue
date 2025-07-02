@@ -85,7 +85,7 @@ const [, drop] = useDrop(() => ({
             console.log(`[ItemCard] Setting target box ${props.id} to loading.`);
 
             console.log(`[ItemCard] Axios Request: Combining '${props.title}' with '${droppedItemTitle}'`);
-            const response = await axios.post('https://opencraft-production.up.railway.app/', {
+            const response = await axios.post('https://chemcraft-production.up.railway.app/', {
                 first: props.title,
                 second: droppedItemTitle
             });
