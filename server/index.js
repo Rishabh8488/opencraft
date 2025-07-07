@@ -115,7 +115,7 @@ async function craftNewWord(firstWord, secondWord) {
             products = answer.split(' + ').map(p => p.trim()).filter(p => p !== '');
 
             // Basic validation/cleanup for each product
-            products = products.filter(p => /^(?:[A-Z][a-z]?\d*)+$/.test(p) || p === "No reaction");
+            products = products.filter(p => /^(?:[A-Z][a-z]?\d*|\(|\))+$/.test(p) || p === "No reaction");
             if (products.length === 0) {
                 products = ["???"]; // Fallback if parsing fails or invalid products
             }

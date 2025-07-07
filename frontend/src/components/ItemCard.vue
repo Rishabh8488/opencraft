@@ -117,7 +117,7 @@ const [, drop] = useDrop(() => ({
                 });
             } else if (productTitles.length > 0) {
                 productTitles.forEach((productTitle: string, index: number) => {
-                    if (/^(?:[A-Z][a-z]?\d*)+$/.test(productTitle)) {
+                    if (/^(?:[A-Z][a-z]?\d*|\(|\))+$/.test(productTitle)) {
                         const newBoxId = Math.random().toString(36).substring(2, 7);
                         console.log(`[ItemCard] Adding New Product Box: ID=${newBoxId}, Title='${productTitle}'`);
 
