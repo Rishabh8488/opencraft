@@ -14,40 +14,38 @@ export const useResourcesStore = defineStore('resources', () => {
   const initialResources: Resource[] = storedResources
     ? JSON.parse(storedResources)
     : [
-        // --- Most Popular/Common Elements ---
-        { title: 'H' },  // Hydrogen
-        { title: 'He' }, // Helium (common, though less reactive for crafting)
-        { title: 'Li' }, // Lithium
-        { title: 'B' },  // Boron
-        { title: 'C' },  // Carbon
-        { title: 'N' },  // Nitrogen
-        { title: 'O' },  // Oxygen
-        { title: 'F' },  // Fluorine
-        { title: 'Ne' }, // Neon (common, though less reactive for crafting)
-        { title: 'Na' }, // Sodium
-        { title: 'Mg' }, // Magnesium
-        { title: 'Al' }, // Aluminum
-        { title: 'Si' }, // Silicon
-        { title: 'P' },  // Phosphorus
-        { title: 'S' },  // Sulfur
-        { title: 'Cl' }, // Chlorine
-        { title: 'Ar' }, // Argon (common, though less reactive for crafting)
-        { title: 'K' },  // Potassium
-        { title: 'Ca' }, // Calcium
-        { title: 'Ti' }, // Titanium
-        { title: 'Cr' }, // Chromium
-        { title: 'Mn' }, // Manganese
-        { title: 'Fe' }, // Iron
-        { title: 'Ni' }, // Nickel
-        { title: 'Cu' }, // Copper
-        { title: 'Zn' }, // Zinc
-        { title: 'Br' }, // Bromine
-        { title: 'Ag' }, // Silver
-        { title: 'I' },  // Iodine
-        { title: 'Au' }, // Gold
-        { title: 'Pb' }, // Lead
-        // You can add or remove elements based on your game's needs
-      ];
+    { title: 'H2' },   // Hydrogen (updated from H)
+    { title: 'He' },   // Helium
+    { title: 'Li' },   // Lithium
+    { title: 'B' },    // Boron
+    { title: 'C' },    // Carbon
+    { title: 'N2' },   // Nitrogen (already N2)
+    { title: 'O2' },   // Oxygen (already O2)
+    { title: 'F2' },   // Fluorine (updated from F)
+    { title: 'Ne' },   // Neon
+    { title: 'Na' },   // Sodium
+    { title: 'Mg' },   // Magnesium
+    { title: 'Al' },   // Aluminum
+    { title: 'Si' },   // Silicon
+    { title: 'P' },    // Phosphorus
+    { title: 'S' },    // Sulfur
+    { title: 'Cl2' },  // Chlorine (already Cl2)
+    { title: 'Ar' },   // Argon
+    { title: 'K' },    // Potassium
+    { title: 'Ca' },   // Calcium
+    { title: 'Ti' },   // Titanium
+    { title: 'Cr' },   // Chromium
+    { title: 'Mn' },   // Manganese
+    { title: 'Fe' },   // Iron
+    { title: 'Ni' },   // Nickel
+    { title: 'Cu' },   // Copper
+    { title: 'Zn' },   // Zinc
+    { title: 'Br2' },  // Bromine (updated from Br)
+    { title: 'Ag' },   // Silver
+    { title: 'I2' },   // Iodine (updated from I)
+    { title: 'Au' },   // Gold
+    { title: 'Pb' }    // Lead
+];
 
   const resources = ref<Resource[]>(initialResources);
 
