@@ -26,7 +26,7 @@ fastify.register(cors, {
 
 // Initialize Gemini API with your API key from .env
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" }); // Keep flash for now, but pro is an option
+const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" }); // Keep flash for now, but pro is an option
 
 // SQLite Database Setup
 let db;
